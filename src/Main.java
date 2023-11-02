@@ -1,33 +1,52 @@
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
-class Lucky {
-    static AtomicInteger x = new AtomicInteger(0);
-    static AtomicInteger count = new AtomicInteger(0);
-
-    static class LuckyThread extends Thread {
-        @Override
-        public void run() {
-            while (x.get() < 999999) {
-                int temp = x.incrementAndGet();
-                if ((temp % 10) + (temp / 10) % 10 + (temp / 100) % 10 == (temp / 1000)
-                        % 10 + (temp / 10000) % 10 + (temp / 100000) % 10) {
-                    System.out.println(temp);
-                    count.incrementAndGet();
-                }
-            }
-        }
-    }
+class PoolExample {
 
     public static void main(String[] args) throws InterruptedException {
-        Thread t1 = new LuckyThread();
-        Thread t2 = new LuckyThread();
-        Thread t3 = new LuckyThread();
-        t1.start();
-        t2.start();
-        t3.start();
-        t1.join();
-        t2.join();
-        t3.join();
-        System.out.println("Total: " + count);
+
+        // создаем пул для выполнения наших задач
+        //   максимальное количество созданных задач - 3
+        ThreadPoolExecutor executor = new ThreadPoolExecutor(
+                // не изменяйте эти параметры
+                3, 3, 1, TimeUnit.SECONDS, new LinkedBlockingQueue<>(3));
+
+        // сколько задач выполнилось
+        AtomicInteger count = new AtomicInteger(0);
+
+        // сколько задач выполняется
+        AtomicInteger inProgress = new AtomicInteger(0);
+
+        // отправляем задачи на выполнение
+        for (int i = 0; i < 30; i++) {
+            final int number = i;
+            Thread.sleep(10);
+
+            System.out.println("creating #" + number);
+
+            while (inProgress.get() == 3) // тут проверяем какое количество задач прямо сейчас выполняется и
+                Thread.sleep(100);  // делаем таймаут 100 мс если уже 3 в работе (делал 1000 - достаточно много)
+
+            executor.submit(() -> {
+                int working = inProgress.incrementAndGet();
+                System.out.println("start #" + number + ", in progress: " + working);
+                try {
+                    // тут какая-то полезная работа
+                    Thread.sleep(Math.round(1000 + Math.random() * 2000));
+                } catch (InterruptedException e) {
+                    // ignore
+                }
+                working = inProgress.decrementAndGet();
+                System.out.println("end #" + number + ", in progress: " + working + ", done tasks: " + count.incrementAndGet());
+                return null;
+            });
+        }
+
+        executor.shutdown(); //выполняем все остальные оставшиеся задачи
+
+        System.out.println("Done");
+
     }
 }
